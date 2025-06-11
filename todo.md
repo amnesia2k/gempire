@@ -1,11 +1,12 @@
-TODO
+TODO: For Gempire
 
 - Server
   [x] Install Dependencies
   [x] Create Express.js Server
-  [] Create Routes
+  [x] Create Routes
+  [x] Create Database and Schemas
   [] Create Middlewares
-  [] Write controllers for all CRUD opportunities
+  [] Write controllers for all CRUD operations
 
 - Client
   [] Create Next.js Application
