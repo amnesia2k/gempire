@@ -5,27 +5,29 @@ import fs from "node:fs";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 
-// Needed to construct __dirname in ESM
+// ESM __dirname fix
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = process.env.PORT || 8000;
 const app = express();
 
-// Middlewares
+// 🌍 Allowed origins for CORS
 const allowedOrigins = [
   "https://auth-api-v1-tau.vercel.app", // prod
   "http://localhost:3000", // dev
-  "http://localhost:3001", // dev
+  "http://localhost:3001", // dev alt
 ];
 
+// 🌐 CORS config
 app.use(
   cors({
     origin: (origin, callback) => {
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        callback(new Error("Not allowed by CORS"));
+        console.warn(`🚫 CORS blocked request from: ${origin}`);
+        callback(new Error(`Not allowed by CORS: ${origin}`));
       }
     },
     credentials: true,
@@ -33,51 +35,57 @@ app.use(
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
   })
 );
+
+// 🍪 Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// Load route files
+// 🔍 Utility to load all route files
+function getAllRouteFiles(dir: string): string[] {
+  let results: string[] = [];
+
+  fs.readdirSync(dir).forEach((file) => {
+    const filePath = path.join(dir, file);
+    const stat = fs.statSync(filePath);
+
+    if (stat.isDirectory()) {
+      results = results.concat(getAllRouteFiles(filePath));
+    } else if (file.endsWith(".ts") || file.endsWith(".js")) {
+      results.push(filePath);
+    }
+  });
+
+  return results;
+}
+
+// 🚀 Dynamic route loading
 const loadRoutes = async () => {
   const routesPath = path.join(__dirname, "routes");
-  const routeFiles = fs
-    .readdirSync(routesPath)
-    .filter((file) => file.endsWith(".ts") || file.endsWith(".js"));
+  const routeFiles = getAllRouteFiles(routesPath);
 
   await Promise.all(
-    routeFiles.map(async (file) => {
+    routeFiles.map(async (filePath) => {
       try {
-        const filePath = path.join(routesPath, file);
         const route = await import(pathToFileURL(filePath).href);
-
         const handler = route.default;
 
-        // Check if handler is a function (middleware/router)
         if (typeof handler === "function") {
           app.use("/api/v1", handler);
-          console.log(`✅ Loaded /api/v1 from ${file}`);
-        }
-        // Or if it's an Express Router object (has 'stack' array)
-        else if (
-          handler &&
-          typeof handler === "object" &&
-          Array.isArray(handler.stack)
-        ) {
-          app.use("/api/v1", handler);
-          console.log(`✅ Loaded /api/v1 from ${file}`);
-        } else {
-          console.warn(
-            `⚠️ Skipped loading ${file} — export default is not a middleware/router function`
+          console.log(
+            `✅ Loaded /api/v1 from ${path.relative(__dirname, filePath)}`
           );
+        } else {
+          console.warn(`⚠️ Skipped: ${filePath} does not export a router`);
         }
       } catch (error) {
-        console.error(`❌ Failed to load route file ${file}:`, error);
+        console.error(`❌ Failed to load ${filePath}:`, error);
       }
     })
   );
 };
 
-// Start server after loading routes
+// 🏁 Start server
 const startServer = async () => {
   await loadRoutes();
 

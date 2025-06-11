@@ -1,5 +1,8 @@
 TODO: For Gempire
 
+- General
+  [] Create a CI pipeline for both server and client
+
 - Server
   [x] Install Dependencies
   [x] Create Express.js Server
