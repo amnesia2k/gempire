@@ -42,17 +42,21 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 // 🔍 Utility to load all route files
-function getAllRouteFiles(dir: string): string[] {
-  let results: string[] = [];
+function getAllRouteFiles(
+  dir: string,
+  baseDir: string
+): { filePath: string; relativePath: string }[] {
+  let results: { filePath: string; relativePath: string }[] = [];
 
   fs.readdirSync(dir).forEach((file) => {
     const filePath = path.join(dir, file);
     const stat = fs.statSync(filePath);
+    const relativePath = path.relative(baseDir, filePath);
 
     if (stat.isDirectory()) {
-      results = results.concat(getAllRouteFiles(filePath));
+      results = results.concat(getAllRouteFiles(filePath, baseDir));
     } else if (file.endsWith(".ts") || file.endsWith(".js")) {
-      results.push(filePath);
+      results.push({ filePath, relativePath });
     }
   });
 
@@ -61,20 +65,55 @@ function getAllRouteFiles(dir: string): string[] {
 
 // 🚀 Dynamic route loading
 const loadRoutes = async () => {
-  const routesPath = path.join(__dirname, "routes");
-  const routeFiles = getAllRouteFiles(routesPath);
+  const routesBasePath = path.join(__dirname, "routes"); // This is your 'routes' folder
+  const routeFiles = getAllRouteFiles(routesBasePath, routesBasePath); // Get all files and their relative paths
 
   await Promise.all(
-    routeFiles.map(async (filePath) => {
+    routeFiles.map(async ({ filePath, relativePath }) => {
       try {
         const route = await import(pathToFileURL(filePath).href);
         const handler = route.default;
 
         if (typeof handler === "function") {
-          app.use("/api/v1", handler);
-          console.log(
-            `✅ Loaded /api/v1 from ${path.relative(__dirname, filePath)}`
-          );
+          let mountPath = "/"; // Default mount path
+
+          // Remove file extension and 'index' if it's an index file
+          let routeSegment = relativePath
+            .replace(/\.(ts|js)$/, "")
+            .replace(/index$/, "");
+
+          // Clean up trailing slash if it's not the root path
+          if (routeSegment !== "") {
+            routeSegment = `/${routeSegment}`;
+          }
+
+          if (relativePath.startsWith(path.join("api", "v1") + path.sep)) {
+            const apiRouteSegment = relativePath
+              .substring((path.join("api", "v1") + path.sep).length) // Remove 'api/v1/' part
+              .replace(/\.(ts|js)$/, "")
+              .replace(/index$/, "");
+
+            mountPath = `/api/v1/${apiRouteSegment}`;
+            if (mountPath.endsWith("/")) {
+              mountPath = mountPath.slice(0, -1); // Remove trailing slash if present
+            }
+            if (mountPath === "/api/v1") {
+              mountPath = "/api/v1"; // Ensure /api/v1 remains /api/v1
+            }
+
+            app.use(mountPath, handler);
+            console.log(
+              `✅ Loaded ${mountPath} from ${path.relative(
+                __dirname,
+                filePath
+              )}`
+            );
+          } else {
+            app.use("/api/v1", handler);
+            console.log(
+              `✅ Loaded /api/v1 from ${path.relative(__dirname, filePath)}`
+            );
+          }
         } else {
           console.warn(`⚠️ Skipped: ${filePath} does not export a router`);
         }
@@ -82,6 +121,28 @@ const loadRoutes = async () => {
         console.error(`❌ Failed to load ${filePath}:`, error);
       }
     })
+  );
+
+  // Add a catch-all 404 handler for any unmatched routes
+  app.use((req, res, next) => {
+    res.status(404).json({
+      message: "Not Found",
+      requestedUrl: req.originalUrl,
+      method: req.method,
+    });
+  });
+
+  // Basic error handler
+  app.use(
+    (
+      err: Error,
+      req: express.Request,
+      res: express.Response,
+      next: express.NextFunction
+    ) => {
+      console.error(err.stack);
+      res.status(500).send("Something broke!");
+    }
   );
 };
 
@@ -95,3 +156,5 @@ const startServer = async () => {
 };
 
 startServer();
+
+export default app;
