@@ -3,6 +3,7 @@ import { db } from "../../db";
 import { adminPasscodes } from "../../db/passcode-schema";
 import { eq } from "drizzle-orm";
 import { generateToken } from "../../helpers/generate-token";
+import jwt from "jsonwebtoken";
 
 type AccessRequestBody = { code: string };
 
@@ -69,6 +70,51 @@ export const logoutAdmin = async (req: Request, res: Response) => {
     res.status(200).json({ message: "Logout successful", success: true });
   } catch (error) {
     console.error("Error logging out admin:", error);
+    res.status(500).json({
+      message: "Internal server error",
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+};
+
+export const getAdmin = async (req: Request, res: Response) => {
+  try {
+    const token = req.cookies.token;
+
+    if (!token) {
+      res.status(401).json({ message: "No token provided", success: false });
+
+      return;
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET!);
+    } catch (err) {
+      res.status(401).json({ message: "Invalid token", success: false });
+      return;
+    }
+
+    const adminId = (decoded as any)._id;
+
+    const result = await db
+      .select()
+      .from(adminPasscodes)
+      .where(eq(adminPasscodes._id, adminId));
+
+    if (result.length === 0) {
+      res.status(404).json({ message: "Admin not found", success: false });
+
+      return;
+    }
+
+    res.status(200).json({
+      message: "Fetched admin data successfully",
+      data: result[0],
+      success: true,
+    });
+  } catch (error) {
+    console.error("Error fetching admin:", error);
     res.status(500).json({
       message: "Internal server error",
       error: error instanceof Error ? error.message : "Unknown error",

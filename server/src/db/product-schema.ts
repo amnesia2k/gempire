@@ -19,6 +19,8 @@ import { productImages } from "./product-images-schema";
 export const products = pgTable("products", {
   _id: varchar({ length: 255 }).primaryKey(),
   name: varchar({ length: 255 }).notNull(),
+  // remove default placeholder when nuking DB
+  slug: varchar({ length: 255 }).notNull(),
   description: varchar({ length: 255 }).notNull(),
   price: numeric({ precision: 10, scale: 2 }).notNull(),
   unit: integer().notNull(),

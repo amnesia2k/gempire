@@ -1,5 +1,5 @@
 {
-  "id": "a10c6976-3407-4a2c-9614-9168b82db67b",
+  "id": "31f6dd1c-f090-40a1-9a52-a6c5c54ed96e",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -47,6 +47,12 @@
         },
         "name": {
           "name": "name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "slug": {
+          "name": "slug",
           "type": "varchar(255)",
           "primaryKey": false,
           "notNull": true
